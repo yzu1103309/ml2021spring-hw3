@@ -90,9 +90,11 @@ train_tfm = transforms.Compose([
     transforms.Resize((128, 128)),
     # You may add some transforms here.
     # ToTensor() should be the last one of the transforms.
+    transforms.RandomPosterize(bits=2, p=0.5),
+    transforms.RandomAutocontrast(p=0.5),
     transforms.RandomRotation(degrees=(0, 90)),
-    transforms.RandomHorizontalFlip(p=0.3),
-    transforms.RandomPerspective(distortion_scale=0.3, p=0.3),
+    transforms.RandomHorizontalFlip(p=0.5),
+    transforms.RandomPerspective(distortion_scale=0.3, p=0.5),
     transforms.ToTensor(),
 ])
 
@@ -106,7 +108,8 @@ test_tfm = transforms.Compose([
 # Batch size for training, validation, and testing.
 # A greater batch size usually gives a more stable gradient.
 # But the GPU memory is limited, so please adjust it carefully.
-batch_size = 128
+# TODO: larger batch
+batch_size = 200
 
 # Construct datasets.
 # The argument "loader" tells how torchvision reads the data.
@@ -241,8 +244,11 @@ def get_pseudo_labels(dataset, model, threshold=0.75):
     # Construct a data loader.
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
+    saved_model = Classifier().to(device)
+    saved_model.load_state_dict(torch.load('model.pth'))
+
     # Make sure the model is in eval mode.
-    model.eval()
+    saved_model.eval()
     # Define softmax function.
     softmax = nn.Softmax(dim=-1)
 
@@ -254,7 +260,7 @@ def get_pseudo_labels(dataset, model, threshold=0.75):
         # Forward the data
         # Using torch.no_grad() accelerates the forward process.
         with torch.no_grad():
-            logits = model(img.to(device))
+            logits = saved_model(img.to(device))
 
         # Obtain the probability distributions by applying softmax on logits.
         probs = softmax(logits)
@@ -295,7 +301,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.0003, weight_decay=1e-5)
 
 # The number of training epochs.
 # TODO: epoch
-n_epochs = 50
+n_epochs = 80
 
 # Whether to do semi-supervised learning.
 # TODO: semi-boolean
@@ -306,7 +312,7 @@ for epoch in range(n_epochs):
     # In each epoch, relabel the unlabeled dataset for semi-supervised learning.
     # Then you can combine the labeled dataset and pseudo-labeled dataset for the training.
     # TODO: Start implementing semi-supervised after the model is strong enough
-    if do_semi and epoch >= 20:
+    if do_semi:
         # Obtain pseudo-labels for unlabeled data using trained model.
         pseudo_set = get_pseudo_labels(unlabeled_set, model)
 
@@ -402,6 +408,11 @@ for epoch in range(n_epochs):
         best_acc = valid_acc
         print(f"Saving model with best acc {valid_acc:.5f}")
         torch.save(model.state_dict(), 'model.pth')
+        if best_acc >= 0.55 and not do_semi:
+            do_semi = True
+            print("------ Will implement Semi-Superviced Training in the next iteration ------")
+    else:
+        do_semi = False
 
 """## **Testing**
 
@@ -430,6 +441,7 @@ You will **NOT** be tolerated if you break the rule and claim you don't know wha
 # Make sure the model is in eval mode.
 # Some modules like Dropout or BatchNorm affect if the model is in training mode.
 saved_model = Classifier().to(device)
+print(f"Loading Model with Best Accuracy {best_acc}")
 saved_model.load_state_dict(torch.load('model.pth'))
 saved_model.eval()
 
