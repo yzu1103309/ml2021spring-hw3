@@ -68,6 +68,7 @@ from PIL import Image
 # "ConcatDataset" and "Subset" are possibly useful when doing semi-supervised learning.
 from torch.utils.data import ConcatDataset, DataLoader, Subset, Dataset
 from torchvision.datasets import DatasetFolder
+import torchvision.models as models # ResNet-18
 
 # This is for the progress bar.
 from tqdm.auto import tqdm
@@ -91,7 +92,7 @@ train_tfm = transforms.Compose([
     # You may add some transforms here.
     # ToTensor() should be the last one of the transforms.
     # transforms.RandomPosterize(bits=2, p=0.5),
-    transforms.RandomAutocontrast(p=0.5),
+    # transforms.RandomAutocontrast(p=0.5),
     transforms.RandomRotation(degrees=(0, 90)),
     transforms.RandomHorizontalFlip(p=0.5),
     transforms.RandomPerspective(distortion_scale=0.3, p=0.5),
@@ -154,54 +155,13 @@ class Classifier(nn.Module):
         # torch.nn.MaxPool2d(kernel_size, stride, padding)
 
         # input image size: [3, 128, 128]
-        self.cnn_layers = nn.Sequential(
-            # [3, 128, 128]
-            nn.Conv2d(3, 128, 5, 1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(),
-            nn.MaxPool2d(2, 2, 0),
-
-            # [128, 62, 62]
-            nn.Conv2d(128, 256, 3, 1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(),
-            nn.MaxPool2d(2, 2, 0),
-
-            # [256, 30, 30]
-            nn.Conv2d(256, 512, 3, 1),
-            nn.BatchNorm2d(512),
-            nn.ReLU(),
-            nn.MaxPool2d(2, 2, 0),
-
-            # [512, 14, 14]
-            nn.Conv2d(512, 1024, 3, 1),
-            nn.BatchNorm2d(1024),
-            nn.ReLU(),
-            nn.MaxPool2d(2, 2, 0),
-        )
-        self.fc_layers = nn.Sequential(
-            # [1024, 4, 4]
-            nn.Linear(1024 * 6 * 6, 1024),
-            nn.ReLU(),
-            nn.Linear(1024, 256),
-            nn.ReLU(),
-            nn.Linear(256, 64),
-            nn.ReLU(),
-            nn.Linear(64, 11)
-        )
+        self.cnn_layers = models.resnet18(pretrained=False)
+        self.cnn_layers.fc = nn.Linear(512, 10)
 
     def forward(self, x):
         # input (x): [batch_size, 3, 128, 128]
         # output: [batch_size, 11]
-
-        # Extract features by convolutional layers.
         x = self.cnn_layers(x)
-
-        # The extracted feature map must be flatten before going to fully-connected layers.
-        x = x.flatten(1)
-
-        # The features are transformed by fully-connected layers to obtain the final logits.
-        x = self.fc_layers(x)
         return x
 
 """## **Training**
@@ -245,7 +205,7 @@ def get_pseudo_labels(dataset, model, threshold=0.8):
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
     saved_model = Classifier().to(device)
-    saved_model.load_state_dict(torch.load('latest_model.pth'))
+    saved_model.load_state_dict(torch.load('model.pth'))
 
     # Make sure the model is in eval mode.
     saved_model.eval()
@@ -403,16 +363,14 @@ for epoch in range(n_epochs):
 
     # Print the information.
     print(f"[ Valid | {epoch + 1:03d}/{n_epochs:03d} ] loss = {valid_loss:.5f}, acc = {valid_acc:.5f}")
-    print("Writing the latest model...")
     torch.save(model.state_dict(), 'latest_model.pth')
     if valid_acc > best_acc:
         best_acc = valid_acc
         print(f"Saving model with best acc {valid_acc:.5f}")
         torch.save(model.state_dict(), 'model.pth')
-
-    if valid_acc >= 0.55:
-        do_semi = True
-        print("------ Will implement Semi-Superviced Training in the next iteration ------")
+        if best_acc >= 0.55 and not do_semi:
+            do_semi = True
+            print("------ Will implement Semi-Superviced Training in the next iteration ------")
     else:
         do_semi = False
 
