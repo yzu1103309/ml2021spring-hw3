@@ -90,8 +90,8 @@ train_tfm = transforms.Compose([
     transforms.Resize((128, 128)),
     # You may add some transforms here.
     # ToTensor() should be the last one of the transforms.
-    transforms.RandomPosterize(bits=2, p=0.5),
-    transforms.RandomAutocontrast(p=0.5),
+    # transforms.RandomPosterize(bits=2, p=0.5),
+    # transforms.RandomAutocontrast(p=0.5),
     transforms.RandomRotation(degrees=(0, 90)),
     transforms.RandomHorizontalFlip(p=0.5),
     transforms.RandomPerspective(distortion_scale=0.3, p=0.5),
@@ -234,7 +234,7 @@ class PseudoDataset(Dataset):
         return self.x[id][0], self.y[id]
 
 
-def get_pseudo_labels(dataset, model, threshold=0.75):
+def get_pseudo_labels(dataset, model, threshold=0.8):
     # This functions generates pseudo-labels of a dataset using given model.
     # It returns an instance of DatasetFolder containing images whose prediction confidences exceed a given threshold.
     # You are NOT allowed to use any models trained on external data for pseudo-labeling.
@@ -403,7 +403,7 @@ for epoch in range(n_epochs):
 
     # Print the information.
     print(f"[ Valid | {epoch + 1:03d}/{n_epochs:03d} ] loss = {valid_loss:.5f}, acc = {valid_acc:.5f}")
-
+    torch.save(model.state_dict(), 'latest_model.pth')
     if valid_acc > best_acc:
         best_acc = valid_acc
         print(f"Saving model with best acc {valid_acc:.5f}")
