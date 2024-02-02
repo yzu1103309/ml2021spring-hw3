@@ -84,11 +84,15 @@ Please refer to [PyTorch official website](https://pytorch.org/vision/stable/tra
 # It is important to do data augmentation in training.
 # However, not every augmentation is useful.
 # Please think about what kind of augmentation is helpful for food recognition.
+# TODO: Augmentation
 train_tfm = transforms.Compose([
     # Resize the image into a fixed shape (height = width = 128)
     transforms.Resize((128, 128)),
     # You may add some transforms here.
     # ToTensor() should be the last one of the transforms.
+    transforms.RandomRotation(degrees=(0, 90)),
+    transforms.RandomHorizontalFlip(p=0.3),
+    transforms.RandomPerspective(distortion_scale=0.3, p=0.3),
     transforms.ToTensor(),
 ])
 
@@ -138,7 +142,7 @@ model = torchvision.models.resnet18(pretrained=**False**) → This is fine.
 
 model = torchvision.models.resnet18(pretrained=**True**)  → This is **NOT** allowed.
 """
-
+# TODO: Change Network
 class Classifier(nn.Module):
     def __init__(self):
         super(Classifier, self).__init__()
@@ -148,27 +152,39 @@ class Classifier(nn.Module):
 
         # input image size: [3, 128, 128]
         self.cnn_layers = nn.Sequential(
-            nn.Conv2d(3, 64, 3, 1, 1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(),
-            nn.MaxPool2d(2, 2, 0),
-
-            nn.Conv2d(64, 128, 3, 1, 1),
+            # [3, 128, 128]
+            nn.Conv2d(3, 128, 5, 1),
             nn.BatchNorm2d(128),
             nn.ReLU(),
             nn.MaxPool2d(2, 2, 0),
 
-            nn.Conv2d(128, 256, 3, 1, 1),
+            # [128, 62, 62]
+            nn.Conv2d(128, 256, 3, 1),
             nn.BatchNorm2d(256),
             nn.ReLU(),
-            nn.MaxPool2d(4, 4, 0),
+            nn.MaxPool2d(2, 2, 0),
+
+            # [256, 30, 30]
+            nn.Conv2d(256, 512, 3, 1),
+            nn.BatchNorm2d(512),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2, 0),
+
+            # [512, 14, 14]
+            nn.Conv2d(512, 1024, 3, 1),
+            nn.BatchNorm2d(1024),
+            nn.ReLU(),
+            nn.MaxPool2d(2, 2, 0),
         )
         self.fc_layers = nn.Sequential(
-            nn.Linear(256 * 8 * 8, 256),
+            # [1024, 4, 4]
+            nn.Linear(1024 * 6 * 6, 1024),
             nn.ReLU(),
-            nn.Linear(256, 256),
+            nn.Linear(1024, 256),
             nn.ReLU(),
-            nn.Linear(256, 11)
+            nn.Linear(256, 64),
+            nn.ReLU(),
+            nn.Linear(64, 11)
         )
 
     def forward(self, x):
@@ -215,11 +231,12 @@ class PseudoDataset(Dataset):
         return self.x[id][0], self.y[id]
 
 
-def get_pseudo_labels(dataset, model, threshold=0.65):
+def get_pseudo_labels(dataset, model, threshold=0.75):
     # This functions generates pseudo-labels of a dataset using given model.
     # It returns an instance of DatasetFolder containing images whose prediction confidences exceed a given threshold.
     # You are NOT allowed to use any models trained on external data for pseudo-labeling.
     device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Using {device}")
 
     # Construct a data loader.
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
@@ -244,7 +261,6 @@ def get_pseudo_labels(dataset, model, threshold=0.65):
         all_probs = torch.cat((all_probs, probs), 0)
         # for tensor in probs:
         #     all_probs.append(tensor)
-        # ---------- TODO ----------
         # Filter the data and construct a new dataset.
 
     vals, labels = torch.max(all_probs, 1)
@@ -256,6 +272,7 @@ def get_pseudo_labels(dataset, model, threshold=0.65):
             new_label.append(labels[i].item())
             selected_index.append(i)
 
+    # TODO: (testing) what if only Subset?
     dataset = PseudoDataset(Subset(dataset, selected_index), new_label)
 
     # # Turn off the eval mode.
@@ -277,16 +294,19 @@ criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=0.0003, weight_decay=1e-5)
 
 # The number of training epochs.
-n_epochs = 80
+# TODO: epoch
+n_epochs = 50
 
 # Whether to do semi-supervised learning.
-do_semi = True
+# TODO: semi-boolean
+do_semi = False
 
+best_acc = 0
 for epoch in range(n_epochs):
-    # ---------- TODO ----------
     # In each epoch, relabel the unlabeled dataset for semi-supervised learning.
     # Then you can combine the labeled dataset and pseudo-labeled dataset for the training.
-    if do_semi:
+    # TODO: Start implementing semi-supervised after the model is strong enough
+    if do_semi and epoch >= 20:
         # Obtain pseudo-labels for unlabeled data using trained model.
         pseudo_set = get_pseudo_labels(unlabeled_set, model)
 
@@ -378,6 +398,11 @@ for epoch in range(n_epochs):
     # Print the information.
     print(f"[ Valid | {epoch + 1:03d}/{n_epochs:03d} ] loss = {valid_loss:.5f}, acc = {valid_acc:.5f}")
 
+    if valid_acc > best_acc:
+        best_acc = valid_acc
+        print(f"Saving model with best acc {valid_acc:.5f}")
+        torch.save(model.state_dict(), 'model.pth')
+
 """## **Testing**
 
 For inference, we need to make sure the model is in eval mode, and the order of the dataset should not be shuffled ("shuffle=False" in test_loader).
@@ -404,7 +429,9 @@ You will **NOT** be tolerated if you break the rule and claim you don't know wha
 
 # Make sure the model is in eval mode.
 # Some modules like Dropout or BatchNorm affect if the model is in training mode.
-model.eval()
+saved_model = Classifier().to(device)
+saved_model.load_state_dict(torch.load('model.pth'))
+saved_model.eval()
 
 # Initialize a list to store the predictions.
 predictions = []
@@ -421,7 +448,7 @@ for batch in tqdm(test_loader):
     # We don't need gradient in testing, and we don't even have labels to compute loss.
     # Using torch.no_grad() accelerates the forward process.
     with torch.no_grad():
-        logits = model(imgs.to(device))
+        logits = saved_model(imgs.to(device))
 
     # Take the class with greatest logit as prediction and record it.
     predictions.extend(logits.argmax(dim=-1).cpu().numpy().tolist())
@@ -433,5 +460,5 @@ with open("predict.csv", "w") as f:
     f.write("Id,Category\n")
 
     # For the rest of the rows, each image id corresponds to a predicted class.
-    for i, pred in  enumerate(predictions):
+    for i, pred in enumerate(predictions):
         f.write(f"{i},{pred}\n")
