@@ -301,13 +301,14 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.0003, weight_decay=1e-5)
 
 # The number of training epochs.
 # TODO: epoch
-n_epochs = 80
+n_epochs = 150
 
 # Whether to do semi-supervised learning.
 # TODO: semi-boolean
 do_semi = False
 
 best_acc = 0
+threshold = 0.55
 for epoch in range(n_epochs):
     # In each epoch, relabel the unlabeled dataset for semi-supervised learning.
     # Then you can combine the labeled dataset and pseudo-labeled dataset for the training.
@@ -410,9 +411,11 @@ for epoch in range(n_epochs):
         print(f"Saving model with best acc {valid_acc:.5f}")
         torch.save(model.state_dict(), 'model.pth')
 
-    if valid_acc >= 0.55:
+    if valid_acc >= threshold:
         do_semi = True
         print("------ Will implement Semi-Superviced Training in the next iteration ------")
+        threshold = threshold + 0.01
+        print(f"Threshold i now {threshold}")
     else:
         do_semi = False
 

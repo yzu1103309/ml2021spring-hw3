@@ -92,7 +92,7 @@ train_tfm = transforms.Compose([
     # You may add some transforms here.
     # ToTensor() should be the last one of the transforms.
     # transforms.RandomPosterize(bits=2, p=0.5),
-    # transforms.RandomAutocontrast(p=0.5),
+    transforms.RandomAutocontrast(p=0.5),
     transforms.RandomRotation(degrees=(0, 90)),
     transforms.RandomHorizontalFlip(p=0.5),
     transforms.RandomPerspective(distortion_scale=0.3, p=0.5),
@@ -155,8 +155,8 @@ class Classifier(nn.Module):
         # torch.nn.MaxPool2d(kernel_size, stride, padding)
 
         # input image size: [3, 128, 128]
-        self.cnn_layers = models.resnet18(pretrained=False)
-        self.cnn_layers.fc = nn.Linear(512, 10)
+        self.cnn_layers = models.resnet18()
+        self.cnn_layers.fc = nn.Linear(512, 11)
 
     def forward(self, x):
         # input (x): [batch_size, 3, 128, 128]
@@ -205,7 +205,7 @@ def get_pseudo_labels(dataset, model, threshold=0.8):
     data_loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
 
     saved_model = Classifier().to(device)
-    saved_model.load_state_dict(torch.load('model.pth'))
+    saved_model.load_state_dict(torch.load('latest_model.pth'))
 
     # Make sure the model is in eval mode.
     saved_model.eval()
@@ -261,13 +261,14 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.0003, weight_decay=1e-5)
 
 # The number of training epochs.
 # TODO: epoch
-n_epochs = 80
+n_epochs = 100
 
 # Whether to do semi-supervised learning.
 # TODO: semi-boolean
 do_semi = False
 
 best_acc = 0
+threshold = 0.5
 for epoch in range(n_epochs):
     # In each epoch, relabel the unlabeled dataset for semi-supervised learning.
     # Then you can combine the labeled dataset and pseudo-labeled dataset for the training.
@@ -363,14 +364,18 @@ for epoch in range(n_epochs):
 
     # Print the information.
     print(f"[ Valid | {epoch + 1:03d}/{n_epochs:03d} ] loss = {valid_loss:.5f}, acc = {valid_acc:.5f}")
+    print("Writing the latest model...")
     torch.save(model.state_dict(), 'latest_model.pth')
     if valid_acc > best_acc:
         best_acc = valid_acc
         print(f"Saving model with best acc {valid_acc:.5f}")
         torch.save(model.state_dict(), 'model.pth')
-        if best_acc >= 0.55 and not do_semi:
-            do_semi = True
-            print("------ Will implement Semi-Superviced Training in the next iteration ------")
+
+    if valid_acc >= threshold:
+        do_semi = True
+        print("------ Will implement Semi-Superviced Training in the next iteration ------")
+        threshold = threshold + 0.01
+        print(f"Threshold i now {threshold}")
     else:
         do_semi = False
 
