@@ -100,7 +100,7 @@ print(f"Using {device}")
 # Make sure the model is in eval mode.
 # Some modules like Dropout or BatchNorm affect if the model is in training mode.
 saved_model = Classifier().to(device)
-saved_model.load_state_dict(torch.load('latest_model.pth'))
+saved_model.load_state_dict(torch.load('model.pth'))
 saved_model.eval()
 
 # Initialize a list to store the predictions.
@@ -124,7 +124,7 @@ for batch in tqdm(test_loader):
     predictions.extend(logits.argmax(dim=-1).cpu().numpy().tolist())
 
 # Save predictions into the file.
-with open("latest_predict.csv", "w") as f:
+with open("predict.csv", "w") as f:
 
     # The first row must be "Id, Category"
     f.write("Id,Category\n")

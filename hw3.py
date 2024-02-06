@@ -109,7 +109,7 @@ test_tfm = transforms.Compose([
 # A greater batch size usually gives a more stable gradient.
 # But the GPU memory is limited, so please adjust it carefully.
 # TODO: larger batch
-batch_size = 200
+batch_size = 155
 
 # Construct datasets.
 # The argument "loader" tells how torchvision reads the data.
@@ -234,7 +234,7 @@ class PseudoDataset(Dataset):
         return self.x[id][0], self.y[id]
 
 
-def get_pseudo_labels(dataset, model, threshold=0.8):
+def get_pseudo_labels(dataset, model, threshold=0.95):
     # This functions generates pseudo-labels of a dataset using given model.
     # It returns an instance of DatasetFolder containing images whose prediction confidences exceed a given threshold.
     # You are NOT allowed to use any models trained on external data for pseudo-labeling.
@@ -301,7 +301,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=0.0003, weight_decay=1e-5)
 
 # The number of training epochs.
 # TODO: epoch
-n_epochs = 150
+n_epochs = 500
 
 # Whether to do semi-supervised learning.
 # TODO: semi-boolean
@@ -414,7 +414,7 @@ for epoch in range(n_epochs):
     if valid_acc >= threshold:
         do_semi = True
         print("------ Will implement Semi-Superviced Training in the next iteration ------")
-        threshold = threshold + 0.01
+        threshold = threshold + 0.02
         print(f"Threshold i now {threshold}")
     else:
         do_semi = False
