@@ -174,18 +174,21 @@ class Classifier(nn.Module):
             nn.MaxPool2d(2, 2, 0),
 
             # [512, 14, 14]
-            nn.Conv2d(512, 1024, 3, 1),
-            nn.BatchNorm2d(1024),
+            nn.Conv2d(512, 512, 3, 1),
+            nn.BatchNorm2d(512),
             nn.ReLU(),
             nn.MaxPool2d(2, 2, 0),
         )
         self.fc_layers = nn.Sequential(
             # [1024, 4, 4]
-            nn.Linear(1024 * 6 * 6, 1024),
+            nn.Linear(512 * 6 * 6, 512),
+            nn.BatchNorm1d(512),
             nn.ReLU(),
-            nn.Linear(1024, 256),
+            nn.Linear(512, 256),
+            nn.BatchNorm1d(256),
             nn.ReLU(),
             nn.Linear(256, 64),
+            nn.BatchNorm1d(64),
             nn.ReLU(),
             nn.Linear(64, 11)
         )
@@ -234,7 +237,7 @@ class PseudoDataset(Dataset):
         return self.x[id][0], self.y[id]
 
 
-def get_pseudo_labels(dataset, model, threshold=0.95):
+def get_pseudo_labels(dataset, model, threshold=0.9):
     # This functions generates pseudo-labels of a dataset using given model.
     # It returns an instance of DatasetFolder containing images whose prediction confidences exceed a given threshold.
     # You are NOT allowed to use any models trained on external data for pseudo-labeling.

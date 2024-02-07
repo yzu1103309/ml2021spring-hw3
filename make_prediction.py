@@ -65,18 +65,21 @@ class Classifier(nn.Module):
             nn.MaxPool2d(2, 2, 0),
 
             # [512, 14, 14]
-            nn.Conv2d(512, 1024, 3, 1),
-            nn.BatchNorm2d(1024),
+            nn.Conv2d(512, 512, 3, 1),
+            nn.BatchNorm2d(512),
             nn.ReLU(),
             nn.MaxPool2d(2, 2, 0),
         )
         self.fc_layers = nn.Sequential(
             # [1024, 4, 4]
-            nn.Linear(1024 * 6 * 6, 1024),
+            nn.Linear(512 * 6 * 6, 512),
+            nn.BatchNorm1d(512),
             nn.ReLU(),
-            nn.Linear(1024, 256),
+            nn.Linear(512, 256),
+            nn.BatchNorm1d(256),
             nn.ReLU(),
             nn.Linear(256, 64),
+            nn.BatchNorm1d(64),
             nn.ReLU(),
             nn.Linear(64, 11)
         )
